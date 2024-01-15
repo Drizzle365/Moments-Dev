@@ -1,0 +1,34 @@
+﻿@page "/"
+@using Moments.Api.Service
+@using Moments.Common
+@inject IReadService ReadService
+@inject ISubscriptionService SubscriptionService
+
+<div>
+    <MButton @onclick="add" Class="mr-2">刷新所有订阅</MButton>  
+    <MButton @onclick="delete">清空</MButton>
+    <MButton OnClick="getinfo">获取信息</MButton>
+    
+</div>
+
+@code
+{
+
+    async Task add()
+    {
+        var items = await SubscriptionService.GetAllSubscriptionsAsync();
+        await ReadService.CreateAllAsync(items);
+    }
+
+    async Task delete()
+    {
+        await ReadService.DeleteAllAsync();
+    }
+
+    async Task getinfo()
+    {
+        var res = await Crawler.CrawlWebsiteInfoAsync("https://yinji.org/feed/atom");
+        Console.WriteLine(res.Introduction);
+    }
+    
+}

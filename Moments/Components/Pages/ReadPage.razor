@@ -1,0 +1,225 @@
+﻿@page "/Read"
+
+@using Moments.Api.Service
+@using Moments.Api.Model
+@inject IReadService ReadService
+@inject IJSRuntime JsRuntime
+<PageTitle>@_title</PageTitle>
+<MRow Style="height: 100vh">
+    <MCol Cols="2" Style="padding: 0;overflow-y: auto;height: 100vh">
+        <MSystemBar Style="background-color: rgb(233,229,234)" Height="50">
+            <h3 style="text-align: center">我的收藏夹</h3>
+        </MSystemBar>
+
+        <MTreeview
+            @bind-Open="@_initiallyOpen"
+            Items="_items"
+            Activatable
+            ItemKey="u => u.Name"
+            ItemChildren="u => u.Children"
+            ItemText="u => u.Name"
+            OpenOnClick>
+            <PrependContent>
+                @if (context.Item.File is null)
+                {
+                    <MIcon>
+                        @(context.Open ? "mdi-folder-open" : "mdi-folder")
+                    </MIcon>
+                }
+                else
+                {
+                    <MAvatar Size="24">
+                        <MImage Alt="Avatar" Src="https://dn-qiniu-avatar.qbox.me/avatar/23609c483d247bcfd1ff7c55deab0333"></MImage>
+                    </MAvatar>
+                }
+            </PrependContent>
+        </MTreeview>
+
+        @code {
+
+            readonly List<Project> _items =
+            [
+                new Project("新闻"),
+                new Project("博客", [new Project("云烟成语", "site")]),
+            ];
+
+            List<string> _initiallyOpen = [];
+
+            public class Project
+            {
+                public string? File { get; set; }
+
+                public string Name { get; set; }
+
+                public List<Project> Children { get; set; } = null!;
+
+                public Project(string name)
+                {
+                    Name = name;
+                }
+
+                public Project(string name, string file)
+                {
+                    Name = name;
+                    File = file;
+                }
+
+                public Project(string name, List<Project> children)
+                {
+                    Name = name;
+                    Children = children;
+                }
+            }
+
+        }
+
+
+    </MCol>
+    <MCol Cols="2" Style="padding: 0;height: 100vh">
+        <MSystemBar Style="background-color: rgb(233,229,234)" Height="50">
+        </MSystemBar>
+        <MList Style="position: absolute;height: calc(100vh - 50px);overflow-y: auto;width: 16.6%" Nav ThreeLine>
+            <MListItemGroup Mandatory ValueChanged="ReadById" Color="primary">
+                @foreach (var item in _reads)
+                {
+                    <MListItem>
+                        <MListItemContent>
+                            <MListItemTitle>@item.Title</MListItemTitle>
+                            <MListItemSubtitle>@item.Description</MListItemSubtitle>
+                        </MListItemContent>
+                    </MListItem>
+                }
+            </MListItemGroup>
+        </MList>
+    </MCol>
+    <MCol Cols="8" Style="padding: 0;">
+        <MSystemBar Style="background-color: rgb(233,229,234)" Height="50">
+            <div>
+                <MButton OnClick="@Up" Icon Color="pink">
+                    <MIcon>mdi-chevron-up</MIcon>
+                </MButton>
+                <MButton OnClick="@Down" Icon Color="pink">
+                    <MIcon>mdi-chevron-down</MIcon>
+                </MButton>
+            </div>
+            <MSpacer></MSpacer>
+            <MButton Icon Color="pink" OnClick="() => { _iframe = !_iframe; }">
+                <MIcon>mdi-web</MIcon>
+            </MButton>
+            <MButton Icon Color="pink">
+                <MIcon>mdi-bookmark-box-multiple-outline</MIcon>
+            </MButton>
+            <MButton Icon Color="pink" OnClick="async () => { if (_now.Title != null) await ExportPdf(_now.Title); }">
+                <MIcon>mdi-file-pdf-box</MIcon>
+            </MButton>
+
+            <MMenu OffsetY>
+                <ActivatorContent>
+                    <MButton @attributes="@context.Attrs" Icon Color="pink">
+                        <MIcon>mdi-dots-vertical</MIcon>
+                    </MButton>
+                </ActivatorContent>
+                <ChildContent>
+                    <MList>
+                        <MListItem>
+                            <MListItemContent>
+                                <MListItemTitle>
+                                    第一个
+                                </MListItemTitle>
+                            </MListItemContent>
+                        </MListItem>
+                        <MListItem>
+                            <MListItemContent>
+                                <MListItemTitle>
+                                    第二个
+                                </MListItemTitle>
+                            </MListItemContent>
+                        </MListItem>
+                        <MListItem>
+                            <MListItemContent>
+                                <MListItemTitle>
+                                    第三个
+                                </MListItemTitle>
+                            </MListItemContent>
+                        </MListItem>
+                    </MList>
+                </ChildContent>
+            </MMenu>
+        </MSystemBar>
+        <MCard Style="position: absolute;height: calc(100vh - 50px);width: 66.7%" Id="read">
+            @if (_iframe)
+            {
+                @if (_load)
+                {
+                    <MRow Id="readMask" Class="fill-height"
+                          AlignContent="@AlignContentTypes.Center"
+                          Justify="@JustifyTypes.Center">
+                        <MCol Class="text-subtitle-1 text-center"
+                              Cols="12">
+                            获取原网页
+                        </MCol>
+                        <MCol Cols="6">
+                            <MProgressLinear Color="deep-purple accent-4"
+                                             Indeterminate
+                                             Rounded
+                                             Height="6">
+                            </MProgressLinear>
+                        </MCol>
+                    </MRow>
+                }
+
+                <iframe onload="IframeOnload()" id="readIframe" src="@_now.Link" style="height: calc(100vh - 50px);width: 100%;overflow-y: auto;border: none">
+
+                </iframe>
+            }
+            else
+            {
+                <div class="markdown-body" style="height: calc(100vh - 50px);width: 100%;overflow-y: auto;padding: 15px">
+                    @(new MarkupString((_now.Content ?? _now.Description) ?? string.Empty))
+                </div>
+            }
+
+
+        </MCard>
+    </MCol>
+</MRow>
+
+@code{
+    string? _title = "Moments 阅读时刻";
+    List<Read> _reads = new();
+    Read _now = new();
+    StringNumber _nowId = 0;
+    bool _iframe;
+    bool _load = true;
+
+    void ReadById(StringNumber? id)
+    {
+        _nowId = id == null ? 0 : id;
+        _now = _reads[(int)_nowId];
+        _title = _now.Title;
+        _load = true;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _reads = await ReadService.GetReadByPageAsync(1);
+        ReadById(0);
+    }
+
+    void Up()
+    {
+        ReadById((int)_nowId - 1);
+    }
+
+    void Down()
+    {
+        ReadById((int)_nowId + 1);
+    }
+
+    async Task ExportPdf(string name)
+    {
+        await JsRuntime.InvokeVoidAsync("ExportPdf", name);
+    }
+
+
+}

@@ -1,0 +1,317 @@
+﻿@page "/Subscription"
+@using Moments.Api.Service
+@using Moments.Api.Model
+@using Moments.Api.Plugin
+@using Moments.Common
+@using Moments.Plugin
+@inject ISubscriptionService SubscriptionService
+@inject PluginManager PluginManager
+<MCard>
+    <MTabs
+        @bind-Value="_tab"
+        BackgroundColor="deep-purple accent-6"
+        Centered
+        Dark
+        IconsAndText>
+        <MTab>
+            订阅
+            <MIcon>mdi-phone</MIcon>
+        </MTab>
+        <MTab>
+            分类
+            <MIcon>mdi-heart</MIcon>
+        </MTab>
+    </MTabs>
+
+    <MTabsItems Value="_tab">
+        <MTabItem>
+            <MDataTable Search="@_search" Headers="_headers"
+                        Loading="_loading"
+                        Items="_subscriptions"
+                        Class="elevation-1">
+                <TopContent>
+                    <MToolbar Flat>
+                        <MToolbarTitle>订阅源管理</MToolbarTitle>
+                        <MDivider Class="mx-4"
+                                  Inset
+                                  Vertical>
+                        </MDivider>
+                        <MTextField @bind-Value="_search"
+                                    AppendIcon="mdi-magnify"
+                                    Label="Search"
+                                    SingleLine
+                                    HideDetails="true">
+                        </MTextField>
+                        <MSpacer></MSpacer>
+                        <MButton Color="primary"
+                                 OnClick="() => { _step = 1; _dialog = true; }">
+                            添加订阅
+                        </MButton>
+                        @foreach (var item in PluginManager.RenderList.FindAll(x => x.Hook == Hook.SubscriptionTopRight))
+                        {
+                            <MDivider Class="mx-4"
+                                      Inset
+                                      Vertical>
+                            </MDivider>
+                            @item.RenderFragment
+                        }
+                        <MDialog @bind-Value="_dialog"
+                                 MaxWidth="500">
+                            <MCard>
+                                <MCardTitle>
+                                    <span class="text-h5">@FormTitle</span>
+                                </MCardTitle>
+                                <MStepper Value="_step">
+                                    <MStepperHeader>
+                                        <MStepperStep Step="1" Complete="_step > 1">
+                                            输入Feed
+                                        </MStepperStep>
+                                        <MDivider></MDivider>
+                                        <MStepperStep Step="2" Complete="_step > 2">
+                                            完善信息
+                                        </MStepperStep>
+                                    </MStepperHeader>
+                                    <MProgressLinear Active="_urlLoading"
+                                                     Indeterminate="_urlLoading"
+                                                     Absolute
+                                                     Bottom
+                                                     Color="deep-purple accent-4">
+                                    </MProgressLinear>
+                                    <MStepperItems Style="padding-top: 30px">
+                                        <MStepperContent Step="1">
+                                            <MCardText>
+                                                <MTextField @bind-Value="_feedUrl"
+                                                            Dense
+                                                            Outlined
+                                                            Label="订阅链接">
+                                                </MTextField>
+                                                <MButton Color="primary" OnClick="async () => { await CrawlWebsiteInfoAsync(_feedUrl); _step = 2; }">下一步</MButton>
+                                            </MCardText>
+                                        </MStepperContent>
+                                        <MStepperContent Step="2">
+                                            <MCardText>
+                                                <MForm>
+                                                    <MTextField @bind-Value="_editedItem.Name"
+                                                                Dense
+                                                                Outlined
+                                                                Label="站点名称">
+                                                    </MTextField>
+                                                    <MTextField @bind-Value="_editedItem.Introduction"
+                                                                Dense
+                                                                Outlined
+                                                                Label="简介">
+                                                    </MTextField>
+                                                    <MTextField @bind-Value="_editedItem.Avatar"
+                                                                Dense
+                                                                Outlined
+                                                                Label="头像">
+                                                    </MTextField>
+                                                    @*     <MSelect Items="Enum.GetNames(typeof(SubscriptionType))" *@
+                                                    @*              @bind-Value="@_editedItem.Type" *@
+                                                    @*              ItemText="u => u" *@
+                                                    @*              ItemValue="u => (SubscriptionType)Enum.Parse(typeof(SubscriptionType), u)" *@
+                                                    @*              Label="规则" *@
+                                                    @*              Dense *@
+                                                    @*              Outlined *@
+                                                    @*              HideDetails="@("auto")"> *@
+                                                    @*     </MSelect> *@
+                                                    <MTextField @bind-Value="_editedItem.SubscriptionUrl"
+                                                                Dense
+                                                                Outlined
+                                                                Label="Feed">
+                                                    </MTextField>
+                                                    <MTextField @bind-Value="_editedItem.WebsiteUrl"
+                                                                Dense
+                                                                Outlined
+                                                                Label="链接">
+                                                    </MTextField>
+                                                </MForm>
+                                                <MButton
+                                                    Color="primary"
+                                                    OnClick="@Save">
+                                                    保存
+                                                </MButton>
+                                            </MCardText>
+                                        </MStepperContent>
+                                    </MStepperItems>
+                                </MStepper>
+
+                                @code {
+                                    private int _step = 1;
+                                }
+
+                            </MCard>
+                        </MDialog>
+                        <MDialog @bind-Value="_dialogDelete" MaxWidth="500">
+                            <MCard>
+                                <MCardTitle Class="text-h5">确认要删除 ?</MCardTitle>
+                                <MCardActions>
+                                    <MSpacer></MSpacer>
+                                    <MButton Color="blue darken-1" Text OnClick="@CloseDelete">取消</MButton>
+                                    <MButton Color="blue darken-1" Text OnClick="@DeleteItemConfirm">确认</MButton>
+                                    <MSpacer></MSpacer>
+                                </MCardActions>
+                            </MCard>
+                        </MDialog>
+                    </MToolbar>
+                </TopContent>
+                <ItemColContent>
+                    @if (context.Header.Value == "actions")
+                    {
+                        <MIcon Small
+                               Class="mr-2"
+                               OnClick="() => EditItem(context.Item)">
+                            mdi-pencil
+                        </MIcon>
+                        <MIcon Small
+                               OnClick="() => DeleteItem(context.Item)">
+                            mdi-delete
+                        </MIcon>
+                    }
+                    else if (context.Header.Value == nameof(Subscription.Tags))
+                    {
+                        foreach (var item in Common.String.GetTags(context.Item.Tags))
+                        {
+                            <MChip Class="ma-1" Small Dark>
+                                @item
+                            </MChip>
+                        }
+                    }
+                    else if (context.Header.Value == nameof(Subscription.Type))
+                    {
+                        <MChip Class="ma-1" Small Dark>
+                            @context.Item.Type
+                        </MChip>
+                    }
+                    else
+                    {
+                        @context.Value
+                    }
+                </ItemColContent>
+            </MDataTable>
+        </MTabItem>
+    </MTabsItems>
+</MCard>
+
+@code {
+    bool _loading = true;
+    string? _search;
+    int _deleteId = -1;
+    int _editedId = -1;
+    StringNumber? _tab;
+    string? _feedUrl;
+    bool _urlLoading;
+
+    private readonly List<DataTableHeader<Subscription>> _headers =
+    [
+        new() { Text = "名称", Value = nameof(Subscription.Name) },
+        new() { Text = "链接", Value = nameof(Subscription.WebsiteUrl) },
+        new() { Text = "源地址", Value = nameof(Subscription.SubscriptionUrl) },
+        new() { Text = "标签", Value = nameof(Subscription.Tags) },
+        new() { Text = "类型", Value = nameof(Subscription.Type) },
+        new() { Text = "操作", Value = "actions", Sortable = false }
+    ];
+
+    private List<Subscription> _subscriptions = new List<Subscription>();
+
+    private bool _dialog;
+    private bool _dialogDelete;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _subscriptions = await SubscriptionService.GetAllSubscriptionsAsync();
+            _loading = false;
+            StateHasChanged();
+        }
+    }
+
+
+    private Subscription _editedItem = new Subscription
+    {
+        Name = "",
+        WebsiteUrl = "",
+        SubscriptionUrl = "",
+    };
+
+
+    private string FormTitle => _editedId == -1 ? "新增" : "编辑";
+
+
+    private void Close()
+    {
+        _dialog = false;
+        _editedItem = new Subscription();
+        _editedId = -1;
+    }
+
+    private async Task Save()
+    {
+        if (_editedId > -1)
+        {
+            var item = _subscriptions[_editedId];
+            item.Name = _editedItem.Name;
+            item.WebsiteUrl = _editedItem.WebsiteUrl;
+            item.SubscriptionUrl = _editedItem.SubscriptionUrl;
+            await SubscriptionService.UpdateSubscriptionAsync(item);
+        }
+        else
+        {
+            var id = await SubscriptionService.CreateSubscriptionAsync(_editedItem);
+            _editedItem.SubscriptionId = id;
+            _subscriptions.Add(_editedItem);
+        }
+
+        Close();
+    }
+
+    public void EditItem(Subscription item)
+    {
+        Console.WriteLine(item.Introduction);
+        _editedId = _subscriptions.IndexOf(item);
+        _editedItem = new Subscription()
+        {
+            Name = item.Name,
+            WebsiteUrl = item.WebsiteUrl,
+            SubscriptionUrl = item.SubscriptionUrl,
+            Introduction = item.Introduction,
+            Type = item.Type,
+            Avatar = item.Avatar
+        };
+        _step = 2;
+        _dialog = true;
+    }
+
+
+    public void DeleteItem(Subscription item)
+    {
+        _editedId = _subscriptions.IndexOf(item);
+        _deleteId = item.SubscriptionId;
+        _dialogDelete = true;
+    }
+
+    private async Task DeleteItemConfirm()
+    {
+        _subscriptions.RemoveAt(_editedId);
+        await SubscriptionService.DeleteSubscriptionAsync(_deleteId);
+        CloseDelete();
+    }
+
+    private void CloseDelete()
+    {
+        _dialogDelete = false;
+        _editedItem = new();
+        _editedId = -1;
+    }
+
+    async Task CrawlWebsiteInfoAsync(string? url)
+    {
+        url ??= "";
+        _urlLoading = true;
+        var res = await Crawler.CrawlWebsiteInfoAsync(url);
+        _editedItem = res;
+        _urlLoading = false;
+    }
+
+}

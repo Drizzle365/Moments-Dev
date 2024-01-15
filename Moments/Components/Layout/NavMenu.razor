@@ -1,0 +1,63 @@
+﻿<MNavigationDrawer Permanent App MiniVariant="_mini">
+    <MList>
+        <MListItem Class="px-2" OnClick="() => _mini = !_mini">
+            <MListItemAvatar Size="40">
+                <MImage Src="/character.png"></MImage>
+            </MListItemAvatar>
+            <MListItemTitle Style="background: linear-gradient(to right, #7c1d1d, #5e5eb1);
+                                   background-clip: text;
+                                   color: transparent;">Moments</MListItemTitle>
+        </MListItem>
+    </MList>
+    <MDivider></MDivider>
+    <MList Routable Nav Dense Rounded>
+        <MListItem Href="/" Link>
+            <MListItemIcon>
+                <MIcon>mdi-home</MIcon>
+            </MListItemIcon>
+            <MListItemTitle>首页</MListItemTitle>
+        </MListItem>
+        <MListItem Href="/Read" Link>
+            <MListItemIcon>
+                <MIcon>mdi-book</MIcon>
+            </MListItemIcon>
+            <MListItemTitle>阅读</MListItemTitle>
+        </MListItem>
+        <MListItem Href="/Subscription" Link>
+            <MListItemIcon>
+                <MIcon>mdi-rss-box</MIcon>
+            </MListItemIcon>
+            <MListItemTitle>订阅</MListItemTitle>
+        </MListItem>
+        <MListItem Href="/PluginPage" Link>
+            <MListItemIcon>
+                <MIcon>mdi-ev-plug-type1</MIcon>
+            </MListItemIcon>
+            <MListItemTitle>插件</MListItemTitle>
+        </MListItem>
+
+        <MListItem Href="/Interface" Link>
+            <MListItemIcon>
+                <MIcon>mdi-face-agent</MIcon>
+            </MListItemIcon>
+            <MListItemTitle>接口</MListItemTitle>
+        </MListItem>
+        <MListItem Href="/Setting" Link>
+            <MListItemIcon>
+                <MIcon>mdi-cog</MIcon>
+            </MListItemIcon>
+            <MListItemTitle>设置</MListItemTitle>
+        </MListItem>
+        <MListItem Href="/About" Link>
+            <MListItemIcon>
+                <MIcon>mdi-information</MIcon>
+            </MListItemIcon>
+            <MListItemTitle>关于</MListItemTitle>
+        </MListItem>
+    </MList>
+</MNavigationDrawer>
+
+@code
+{
+    bool _mini = true;
+}

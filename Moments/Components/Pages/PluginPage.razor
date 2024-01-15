@@ -1,0 +1,134 @@
+﻿@page "/PluginPage"
+@using Moments.Plugin
+@using System.IO
+@inject PluginManager PluginManager
+
+@inject IWebHostEnvironment Environment
+@inject IPopupService PopupService
+<MCard Class="mx-auto">
+    <MToolbar Elevation="1">
+        <MAppBarNavIcon></MAppBarNavIcon>
+        <MToolbarTitle>插件列表</MToolbarTitle>
+        <MSpacer></MSpacer>
+        <MButton class="ma-2 white--text"
+                 Color="blue-grey">
+            上传插件
+            <div style="opacity: 0;position: absolute;left: 0;right:0;cursor: pointer">
+                <InputFile OnChange="@Import" style="width: 100%"/>
+            </div>
+        </MButton>
+    </MToolbar>
+    @if (PluginManager.UnInstallPlugins.Count == 0 && PluginManager.InstallPlugins.Count == 0)
+    {
+        <div style="height: 300px;text-align: center;padding: 20px">您还未安装任何插件</div>
+    }
+    else
+    {
+        <MList ThreeLine>
+            @if (PluginManager.UnInstallPlugins.Count > 0)
+            {
+                <MDivider Inset></MDivider>
+                <MSubheader Inset>未安装</MSubheader>
+                @foreach (var item in PluginManager.UnInstallPlugins)
+                {
+                    <MListItem>
+                        <MListItemAvatar>
+                            <MImage Src="https://dn-qiniu-avatar.qbox.me/avatar/23609c483d247bcfd1ff7c55deab0333?s=100"></MImage>
+                        </MListItemAvatar>
+                        <MListItemContent>
+                            <MListItemTitle>
+                                @item.Name
+                                <MChip Class="ma-2" Small
+                                       Color="primary">
+                                    @item.Version
+                                </MChip>
+                            </MListItemTitle>
+                            <MListItemSubtitle>作者：@item.Author</MListItemSubtitle>
+                        </MListItemContent>
+                        <MButton Class="mr-2" OnClick="async () => { await Install(item.PackageName); }" Elevation="2">
+                            安装
+                        </MButton>
+                        <MButton OnClick="async () => { await Delete(item.PackageName); }" Elevation="2">
+                            删除
+                        </MButton>
+                    </MListItem>
+                }
+            }
+            @if (PluginManager.InstallPlugins.Count > 0)
+            {
+                <MDivider Inset></MDivider>
+                <MSubheader Inset>已安装</MSubheader>
+                @foreach (var item in PluginManager.InstallPlugins)
+                {
+                    <MListItem>
+                        <MListItemAvatar>
+                            <MImage Src="https://dn-qiniu-avatar.qbox.me/avatar/23609c483d247bcfd1ff7c55deab0333?s=100"></MImage>
+                        </MListItemAvatar>
+                        <MListItemContent>
+                            <MListItemTitle>
+                                @item.Name
+                                <MChip Class="ma-2" Small
+                                       Color="primary">
+                                    @item.Version
+                                </MChip>
+                            </MListItemTitle>
+                            <MListItemSubtitle>作者：@item.Author</MListItemSubtitle>
+                        </MListItemContent>
+                        <MButton OnClick="async () => { await UnInstall(item.PackageName); }" Elevation="2">
+                            卸载
+                        </MButton>
+                    </MListItem>
+                }
+            }
+
+        </MList>
+    }
+</MCard>
+
+@code{
+
+    protected override void OnInitialized()
+    {
+    }
+
+    async Task Import(InputFileChangeEventArgs e)
+    {
+        var file = e.GetMultipleFiles().First();
+        try
+        {
+            var trustedFileName = file.Name;
+            var path = Environment.ContentRootPath + "\\Plugin\\Package\\" + trustedFileName;
+            await using (FileStream fs = new(path, FileMode.Create))
+            {
+                await file.OpenReadStream().CopyToAsync(fs);
+            }
+
+            PluginManager.LoadPlugin(path);
+            StateHasChanged();
+            await PopupService.EnqueueSnackbarAsync("上传成功");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex);
+        }
+    }
+
+    async Task Delete(string packageName)
+    {
+        PluginManager.DeletePlugin(packageName);
+        await PopupService.EnqueueSnackbarAsync($"插件：{packageName} 删除成功");
+    }
+
+    async Task Install(string packageName)
+    {
+        PluginManager.InstallPlugin(packageName);
+        await PopupService.EnqueueSnackbarAsync($"插件：{packageName} 安装成功");
+    }
+    async Task UnInstall(string packageName)
+    {
+        PluginManager.UnInstallPlugin(packageName);
+        await PopupService.EnqueueSnackbarAsync($"插件：{packageName} 卸载成功");
+    }
+
+
+}
