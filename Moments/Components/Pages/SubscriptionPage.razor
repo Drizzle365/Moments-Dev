@@ -4,6 +4,7 @@
 @using Moments.Api.Plugin
 @using Moments.Common
 @using Moments.Plugin
+@using System.Xml;
 @inject ISubscriptionService SubscriptionService
 @inject PluginManager PluginManager
 <MCard>
@@ -43,7 +44,18 @@
                                     HideDetails="true">
                         </MTextField>
                         <MSpacer></MSpacer>
-                        <MButton Color="primary"
+
+                        <InputFile OnChange="@LoadImportedFeeds" Id="feed-import-form" style="display: none">
+                            导入订阅
+                        </InputFile>
+
+                        <MButton Color="primary">
+                            <MLabel For="feed-import-form">
+                                导入订阅
+                            </MLabel>
+                        </MButton>
+                        
+                        <MButton Id="import-feed-btn" Color="primary"
                                  OnClick="() => { _step = 1; _dialog = true; }">
                             添加订阅
                         </MButton>
@@ -55,6 +67,47 @@
                             </MDivider>
                             @item.RenderFragment
                         }
+
+                        <MDialog @bind-value="_import_dialog"
+                                 MaxWidth="1200">
+                        @if(_import_urls != null){
+                            @foreach (var url in _import_urls){
+                                <div class="import-feeds-item">
+                                    <div>@url</div>
+                                    @if(_import_subscriptions.ContainsKey(url)){
+                                    <MTextField @bind-Value="_import_subscriptions[url].Name"
+                                                Dense
+                                                Outlined
+                                                Label="站点名称">
+                                    </MTextField>
+                                    <MTextField @bind-Value="_import_subscriptions[url].Introduction"
+                                                Dense
+                                                Outlined
+                                                Label="简介">
+                                    </MTextField>
+                                    <MTextField @bind-Value="_import_subscriptions[url].Avatar"
+                                                Dense
+                                                Outlined
+                                                Label="头像">
+                                    </MTextField>
+                                    <MTextField @bind-Value="_import_subscriptions[url].WebsiteUrl"
+                                                Dense
+                                                Outlined
+                                                Label="链接">
+                                    </MTextField>
+                                }
+   
+                                </div>
+                            }
+                        }
+                        <MButton
+                            Disabled="_import_save_btn_disabled"
+                            Color="primary"
+                            OnClick="@Save">
+                            保存
+                        </MButton>
+                        </MDialog>
+
                         <MDialog @bind-Value="_dialog"
                                  MaxWidth="500">
                             <MCard>
@@ -201,6 +254,11 @@
     StringNumber? _tab;
     string? _feedUrl;
     bool _urlLoading;
+    bool _import_dialog = false;
+    bool _import_save_btn_disabled=true;
+    List<string>? _import_urls;
+
+    Dictionary<string, Subscription> _import_subscriptions = new Dictionary<string, Subscription>();
 
     private readonly List<DataTableHeader<Subscription>> _headers =
     [
@@ -314,4 +372,36 @@
         _urlLoading = false;
     }
 
+    async private void LoadImportedFeeds(InputFileChangeEventArgs e){
+        if(e.FileCount == 1){
+            var file = e.File;
+            _import_dialog = true;
+            string content = await new StreamReader(file.OpenReadStream()).ReadToEndAsync();
+            _import_urls = OpmlParser.Parse(content);
+            List<Task> tasks = new List<Task>();
+            foreach(var url in _import_urls){
+                tasks.Add(
+                    Task.Run(() =>
+                     {
+                        return Crawler.CrawlWebsiteInfoAsync(url);
+                     })
+                    .ContinueWith(
+                        (task) => {
+                            var subscription = task.Result;
+                            if(subscription!=null){
+                                _import_subscriptions[subscription.SubscriptionUrl] = subscription;
+                                InvokeAsync(StateHasChanged);
+                            }
+                    }));
+            }
+            var waitAll = Task.WhenAll(tasks.ToArray());
+            try{
+                await waitAll;
+            }catch(Exception exp){
+
+            }finally{
+                _import_save_btn_disabled = false;
+            }
+        }
+    }
 }
