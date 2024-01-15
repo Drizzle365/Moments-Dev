@@ -3,8 +3,10 @@
 @using Moments.Api.Model
 @using Moments.Api.Plugin
 @using Moments.Common
+@using System.Collections.Concurrent
 @using Moments.Plugin
 @using System.Xml;
+@inject ILogger<SubscriptionPage> Logger
 @inject ISubscriptionService SubscriptionService
 @inject PluginManager PluginManager
 <MCard>
@@ -73,7 +75,12 @@
                         @if(_import_urls != null){
                             @foreach (var url in _import_urls){
                                 <div class="import-feeds-item">
-                                    <div>@url</div>
+                                    <MTextField Value="@url"
+                                                Disabled="true"
+                                                Dense
+                                                Outlined
+                                                Label="站点名称">
+                                    </MTextField>
                                     @if(_import_subscriptions.ContainsKey(url)){
                                     <MTextField @bind-Value="_import_subscriptions[url].Name"
                                                 Dense
@@ -95,7 +102,12 @@
                                                 Outlined
                                                 Label="链接">
                                     </MTextField>
-                                }
+                                    }
+                                    @if(_import_subscriptions_exceptions.ContainsKey(url)){
+                                        <MAlert Color="#2A3B4D" MaxHeight="40" Icon="@("mdi-firework")">
+                                            Import feed failed, @_import_subscriptions_exceptions[url].Message
+                                        </MAlert>
+                                    }
    
                                 </div>
                             }
@@ -258,7 +270,8 @@
     bool _import_save_btn_disabled=true;
     List<string>? _import_urls;
 
-    Dictionary<string, Subscription> _import_subscriptions = new Dictionary<string, Subscription>();
+    IDictionary<string, Subscription> _import_subscriptions = new ConcurrentDictionary<string, Subscription>();
+    IDictionary<string, Exception> _import_subscriptions_exceptions = new ConcurrentDictionary<string, Exception>();
 
     private readonly List<DataTableHeader<Subscription>> _headers =
     [
@@ -381,9 +394,14 @@
             List<Task> tasks = new List<Task>();
             foreach(var url in _import_urls){
                 tasks.Add(
-                    Task.Run(() =>
+                    Task.Run(async () =>
                      {
-                        return Crawler.CrawlWebsiteInfoAsync(url);
+                        try{
+                            return await Crawler.CrawlWebsiteInfoAsync(url);
+                        }catch (Exception exce){
+                            _import_subscriptions_exceptions[url] = exce;
+                            return null;
+                        }
                      })
                     .ContinueWith(
                         (task) => {
@@ -397,10 +415,11 @@
             var waitAll = Task.WhenAll(tasks.ToArray());
             try{
                 await waitAll;
-            }catch(Exception exp){
-
+            }catch(Exception exce){
+                Logger.LogError(exce, "Fetching Feeds error");
             }finally{
                 _import_save_btn_disabled = false;
+                InvokeAsync(StateHasChanged);
             }
         }
     }

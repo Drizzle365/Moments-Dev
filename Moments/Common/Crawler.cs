@@ -57,11 +57,24 @@ public static class Crawler
     public static async Task<Subscription> CrawlWebsiteInfoAsync(string feedUrl)
     {
         using HttpClient client = new HttpClient();
+        client.Timeout = TimeSpan.FromSeconds(10);
         string baseUrl = GetBaseUrl(feedUrl);
         string feedContent = await client.GetStringAsync(feedUrl);
         string htmlContent = await client.GetStringAsync(baseUrl);
         using XmlReader reader = XmlReader.Create(new StringReader(feedContent));
-        SyndicationFeed feed = await Task.Run(() => SyndicationFeed.Load(reader));
+
+        Exception? error = null;
+        SyndicationFeed? feed = await Task.Run(() => {
+            try{
+                return SyndicationFeed.Load(reader);
+            }catch(Exception e){
+                error = e;
+                return null;
+            }
+        });
+        if(error!=null){
+            throw error;
+        }
 
         return new Subscription
         {

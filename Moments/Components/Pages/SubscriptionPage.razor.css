@@ -2,3 +2,7 @@
     display: grid;
     grid-template-columns: 1fr 1fr 1fr 1fr 1fr;
 }
+
+.import-feeds-item > *{
+    overflow: hidden;
+}
