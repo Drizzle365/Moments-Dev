@@ -1,5 +1,6 @@
 ﻿using System.Reflection;
 using System.Runtime.Loader;
+using System.IO;
 using Moments.Api.Model;
 using Moments.Api.Plugin;
 
@@ -7,7 +8,8 @@ namespace Moments.Plugin;
 
 public class PluginManager(IWebHostEnvironment webHostEnvironment, IFreeSql db)
 {
-    private readonly string _folderPath = webHostEnvironment.ContentRootPath + "\\Plugin\\Package";
+    private readonly string _folderPath = Path.Combine(webHostEnvironment.ContentRootPath, "Plugin", "Package");
+
     public readonly List<IPlugin> InstallPlugins = [];
     public readonly List<IPlugin> UnInstallPlugins = [];
     public readonly List<RenderNode> RenderList = [];

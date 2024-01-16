@@ -3,7 +3,10 @@
 @using Moments.Api.Model
 @using Moments.Api.Plugin
 @using Moments.Common
+@using System.Collections.Concurrent
 @using Moments.Plugin
+@using System.Xml;
+@inject ILogger<SubscriptionPage> Logger
 @inject ISubscriptionService SubscriptionService
 @inject PluginManager PluginManager
 <MCard>
@@ -43,7 +46,18 @@
                                     HideDetails="true">
                         </MTextField>
                         <MSpacer></MSpacer>
-                        <MButton Color="primary"
+
+                        <InputFile OnChange="@LoadImportedFeeds" Id="feed-import-form" style="display: none">
+                            导入订阅
+                        </InputFile>
+
+                        <MButton Color="primary">
+                            <MLabel For="feed-import-form">
+                                导入订阅
+                            </MLabel>
+                        </MButton>
+                        
+                        <MButton Id="import-feed-btn" Color="primary"
                                  OnClick="() => { _step = 1; _dialog = true; }">
                             添加订阅
                         </MButton>
@@ -55,6 +69,74 @@
                             </MDivider>
                             @item.RenderFragment
                         }
+
+                        @if(_import_feed_task != null){
+                        <MDialog @bind-Value="_import_feed_task.ImportDialogShown"
+                                Persistent
+                                MaxWidth="1200">
+                        <MCard>
+                        @if(_import_feed_task !=null && _import_feed_task.ImportUrls != null){
+                            @foreach (var url in _import_feed_task.ImportUrls){
+                                <div class="import-feeds-item">
+                                    <MTextField Value="@url"
+                                                Disabled="true"
+                                                Dense
+                                                Outlined
+                                                Label="站点名称">
+                                    </MTextField>
+                                    @if(_import_feed_task.ImportSubscriptions.ContainsKey(url)){
+                                    <MTextField @bind-Value="_import_feed_task.ImportSubscriptions[url].Name"
+                                                Dense
+                                                Disabled="@_import_feed_task.FeedsSaving"
+                                                Outlined
+                                                Label="站点名称">
+                                    </MTextField>
+                                    <MTextField @bind-Value="_import_feed_task.ImportSubscriptions[url].Introduction"
+                                                Dense
+                                                Disabled="@_import_feed_task.FeedsSaving"
+                                                Outlined
+                                                Label="简介">
+                                    </MTextField>
+                                    <MTextField @bind-Value="_import_feed_task.ImportSubscriptions[url].Avatar"
+                                                Dense
+                                                Disabled="@_import_feed_task.FeedsSaving"
+                                                Outlined
+                                                Label="头像">
+                                    </MTextField>
+                                    <MTextField @bind-Value="_import_feed_task.ImportSubscriptions[url].WebsiteUrl"
+                                                Dense
+                                                Disabled="@_import_feed_task.FeedsSaving"
+                                                Outlined
+                                                Label="链接">
+                                    </MTextField>
+                                    }
+                                    @if(_import_feed_task.ImportExceptions.ContainsKey(url)){
+                                    <MAlert Class="import-feeds-error" Dense Type="AlertTypes.Error" ColoredBorder Border="Borders.Left">
+                                        Import feed failed, @_import_feed_task.ImportExceptions[url].ToString().Split("\n")[0]
+                                    </MAlert>
+                                    }
+   
+                                </div>
+                            }
+                        }
+                        <MCardActions>
+                            <MSpacer></MSpacer>
+                            <MButton Color="green darken-1"
+                                    Text
+                                    OnClick=@CancelImportFeeds>
+                                取消
+                            </MButton>
+                            <MButton
+                                Disabled="_import_feed_task == null ||  (_import_feed_task.SaveButtonDisabled && !_import_feed_task.Finished)"
+                                Color="primary"
+                                OnClick="@SaveImportFeeds">
+                                @(_import_feed_task?.Finished ?? true ? "关闭" : "保存")
+                            </MButton>
+                        </MCardActions>
+                        </MCard>
+                        </MDialog>
+                        }
+
                         <MDialog @bind-Value="_dialog"
                                  MaxWidth="500">
                             <MCard>
@@ -201,6 +283,36 @@
     StringNumber? _tab;
     string? _feedUrl;
     bool _urlLoading;
+    @* List<string>? _import_urls; *@
+
+    public class ImportFeedTask {
+        public IDictionary<string, Subscription> ImportSubscriptions { get; }
+        public IDictionary<string, Exception> ImportExceptions { get; }
+        public bool ImportDialogShown { get; set; }
+        public bool SaveButtonDisabled { get; set; }
+        public List<string> ImportUrls { get; set;}
+        public bool FeedsSaving { get; set; }
+        public int Saved { get; set; }
+        public int Savable { get; set; }
+        public bool Finished { get; set; }
+
+        public ImportFeedTask(){
+            ImportDialogShown = false;
+            SaveButtonDisabled = true;
+            ImportSubscriptions = new ConcurrentDictionary<string, Subscription>();
+            ImportExceptions = new ConcurrentDictionary<string, Exception>();
+            ImportUrls = new List<string>();
+            FeedsSaving = false;
+            Finished = false;
+            Saved = 0;
+            Savable = 0;
+        }
+    }
+
+    ImportFeedTask? _import_feed_task;
+
+    @* IDictionary<string, Subscription> _import_subscriptions = new ConcurrentDictionary<string, Subscription>(); *@
+    @* IDictionary<string, Exception> _import_subscriptions_exceptions = new ConcurrentDictionary<string, Exception>(); *@
 
     private readonly List<DataTableHeader<Subscription>> _headers =
     [
@@ -314,4 +426,82 @@
         _urlLoading = false;
     }
 
+    async private void SaveImportFeeds(){
+        if(_import_feed_task?.Finished ?? true) {
+            @* Close the import dialog and clear resource *@
+            _import_feed_task = null;
+            Logger.LogInformation("Import Finished");
+        }else{
+            if(_import_feed_task == null){
+                throw new Exception("_import_feed_task shoudn't be null when saving");
+            }
+            _import_feed_task.FeedsSaving = true;
+            _import_feed_task.SaveButtonDisabled = true;
+            _import_feed_task.Savable = _import_feed_task.ImportSubscriptions.Count;
+            foreach(var (key, value) in _import_feed_task.ImportSubscriptions) {
+                try{
+                    var id = await SubscriptionService.CreateSubscriptionAsync(value);
+                    value.SubscriptionId = id;
+                    _subscriptions.Add(value);
+                    _import_feed_task.Saved++;
+                }catch(Exception e){
+                    _import_feed_task.ImportExceptions[key] = e;
+                    Logger.LogWarning(e, "Saving Subscription Error");
+                }
+            }
+            _import_feed_task.Finished = true;
+            _import_feed_task.ImportUrls = _import_feed_task.ImportExceptions.Keys.ToList();
+        }
+    }
+
+    private void CancelImportFeeds(){
+        _import_feed_task = null;
+    }
+
+    async private void LoadImportedFeeds(InputFileChangeEventArgs e){
+        if(e.FileCount != 1){
+            return;
+        }
+        var importTask = new ImportFeedTask();
+        _import_feed_task = importTask;
+        var file = e.File;
+        importTask.ImportDialogShown = true;
+        await InvokeAsync(StateHasChanged);
+        string content = await new StreamReader(file.OpenReadStream()).ReadToEndAsync();
+        importTask.ImportUrls = OpmlParser.Parse(content);
+        List<Task> tasks = new List<Task>();
+        foreach(var url in importTask.ImportUrls){
+            tasks.Add(
+                Crawler.CrawlWebsiteInfoAsync(url)
+                .ContinueWith(
+                    (task) => {
+                        if(task.IsFaulted){
+                            var exception = task.Exception;
+                            importTask.ImportExceptions[url] = exception;
+                        }else{
+                            try{
+                                var subscription = task.Result;
+                                if(subscription!=null){
+                                    importTask.ImportSubscriptions[subscription.SubscriptionUrl] = subscription;
+                                    InvokeAsync(StateHasChanged);
+                                }
+                            }catch(Exception exception){
+                                importTask.ImportExceptions[url] = exception;
+                            }
+                        }
+                        if(importTask.ImportExceptions.ContainsKey(url)) {
+                            Logger.LogWarning(importTask.ImportExceptions[url], "import feed error");
+                        }
+                }));
+        }
+        var waitAll = Task.WhenAll(tasks.ToArray());
+        try{
+            await waitAll;
+        }catch(Exception exce){
+            Logger.LogError(exce, "Fetching Feeds error");
+        }finally{
+            importTask.SaveButtonDisabled = false;
+            InvokeAsync(StateHasChanged);
+        }
+    }
 }
