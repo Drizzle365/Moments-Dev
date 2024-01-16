@@ -1,8 +1,17 @@
 .import-feeds-item {
     display: grid;
     grid-template-columns: 1fr 1fr 1fr 1fr 1fr;
+    gap: 10px;
 }
 
 .import-feeds-item > *{
     overflow: hidden;
+    align-self: center;
+}
+
+::deep .import-feeds-error {
+    grid-column-start: 2;
+    grid-column-end: 6;
+    white-space: nowrap;
+    overflow-x: scroll;
 }

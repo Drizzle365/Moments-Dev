@@ -62,19 +62,10 @@ public static class Crawler
         string feedContent = await client.GetStringAsync(feedUrl);
         string htmlContent = await client.GetStringAsync(baseUrl);
         using XmlReader reader = XmlReader.Create(new StringReader(feedContent));
-
-        Exception? error = null;
-        SyndicationFeed? feed = await Task.Run(() => {
-            try{
-                return SyndicationFeed.Load(reader);
-            }catch(Exception e){
-                error = e;
-                return null;
-            }
+        SyndicationFeed? feed = null;
+        feed = await Task.Run(() => {
+            return SyndicationFeed.Load(reader);
         });
-        if(error!=null){
-            throw error;
-        }
 
         return new Subscription
         {
